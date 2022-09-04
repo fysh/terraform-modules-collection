@@ -1,29 +1,38 @@
-resource "aws_s3_bucket" "terraform_tfstate" {
-  bucket = var.bucket_name
-  acl    = "private"
-  force_destroy = false
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
-  tags = var.tags
+resource "aws_s3_bucket" "this" {
+  bucket        = var.bucket_name
+  force_destroy = var.force_destroy
+  tags          = var.tags
 }
 
-resource "aws_dynamodb_table" "terraform_locks" {
-  count        = var.enable_dynamodb ? 1 : 0
+resource "aws_kms_key" "this" {
+  description             = "This key is used to encrypt bucket objects"
+  deletion_window_in_days = 10
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.bucket
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.this.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_acl" "this" {
+  bucket = aws_s3_bucket.this.id
+  acl    = var.acl
+}
+
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+  versioning_configuration {
+    status = var.versioning
+  }
+}
+
+resource "aws_dynamodb_table" "this" {
   name         = var.lock_table_name
   hash_key     = "LockID"
   billing_mode = "PAY_PER_REQUEST"
@@ -34,8 +43,8 @@ resource "aws_dynamodb_table" "terraform_locks" {
   tags = var.tags
 }
 
-resource "aws_s3_bucket_public_access_block" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_tfstate.id
+resource "aws_s3_bucket_public_access_block" "this" {
+  bucket                  = aws_s3_bucket.this.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
