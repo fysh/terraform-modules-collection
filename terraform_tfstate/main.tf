@@ -23,6 +23,7 @@ resource "aws_s3_bucket" "terraform_tfstate" {
 }
 
 resource "aws_dynamodb_table" "terraform_locks" {
+  count        = var.enable_dynamodb ? 1 : 0
   name         = var.lock_table_name
   hash_key     = "LockID"
   billing_mode = "PAY_PER_REQUEST"
